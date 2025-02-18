@@ -1,12 +1,12 @@
 # bgfx glfw3 wasm 3d cube template starting point
 
-A basic spinning 3D cube, using bgfx and glfw3 compiling for WebAssembly (wasm) using Emscripten. Tested on Debian Bookworm (12). Very specific versions of bgfx and Emscripten are targeted; upgrading to newer versions may or may not work.
+A basic spinning 3D cube, using bgfx and glfw3 compiling for WebAssembly (wasm) using Emscripten. Additionally compiles to native Linux/X11. Tested on Debian Bookworm (12), might work on Debian Bullseye (11). Very specific versions of bgfx and Emscripten are targeted; upgrading to newer versions may or may not work.
 
 ## WebAssembly
 
 ### Dependencies (WebAssembly)
 
-* `#apt install git python3 xz-utils cmake make`
+* `# apt install git python3 xz-utils cmake make`
 
 #### Install emscripten sdk and prepare build environment
 
@@ -32,8 +32,33 @@ A basic spinning 3D cube, using bgfx and glfw3 compiling for WebAssembly (wasm) 
 ### Running (WebAssembly)
 
 * `python -m SimpleHTTPServer 8080 #or other webserver`
-* Available at: http://localhost:8080/index.html
+* In your web browser: http://localhost:8080/index.html
 
 ## Native Linux/X11
 
-`TODO`
+### Dependencies (Linux/X11)
+
+`# apt install git build-essential cmake libglfw3-dev`
+
+### Building (Linux/X11)
+
+* `git clone https://github.com/d3fault/bgfx-glfw-wasm-3dcube-template-starting-point.git`
+* `cd bgfx-glfw-wasm-3dcube-template-starting-point`
+* `git submodule update --init --recursive`
+* `cd bgfx`
+* `make linux-debug64 #it might error out on one of the examples, this is fine. just make sure libbgfx-shared-libDebug.so exists in bgfx/.build/linux64_gcc/bin/`
+* `cd ..`
+* `cmake -B buildnative`
+* `cd buildnative`
+* `cmake --build . --parallel`
+
+### Running (Linux/X11)
+
+* `./bgfx-glfw-wasm-3dcube-template-starting-point`
+
+## TODO (patches welcome)
+
+* Release builds
+* Multi-threading(?)
+* Newer Emscripten and bgfx versions
+* Auto-detect screen dimensions
