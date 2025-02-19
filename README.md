@@ -6,7 +6,7 @@ A basic spinning 3D cube, using bgfx and glfw3 compiling for WebAssembly (wasm) 
 
 ### Dependencies (WebAssembly)
 
-* `# apt install git python3 xz-utils cmake make`
+* `# apt install git python3 xz-utils cmake make libglm-dev`
 
 #### Install emscripten sdk and prepare build environment
 
@@ -38,7 +38,7 @@ A basic spinning 3D cube, using bgfx and glfw3 compiling for WebAssembly (wasm) 
 
 ### Dependencies (Linux/X11)
 
-`# apt install git build-essential cmake libglfw3-dev`
+`# apt install git build-essential cmake libglfw3-dev libglm-dev`
 
 ### Building (Linux/X11)
 

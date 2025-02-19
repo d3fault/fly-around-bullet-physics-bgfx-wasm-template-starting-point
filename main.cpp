@@ -2,6 +2,9 @@
 #include <vector>
 #include <fstream>
 
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/quaternion.hpp>
+
 #include <bgfx/bgfx.h>
 #include <bgfx/platform.h>
 #include "bx/math.h"
@@ -110,14 +113,52 @@ void renderFrame() {
     bx::mtxProj(proj, 60.0f, float(screenWidth) / float(screenHeight), 0.1f, 100.0f, bgfx::getCaps()->homogeneousDepth);
     bgfx::setViewTransform(0, view, proj);
 
-    float mtx[16];
-    bx::mtxRotateXY(mtx, counter * 0.01f, counter * 0.01f);
-    bgfx::setTransform(mtx);
+    // Cube 1 (Single Combined Rotation - Same as before)
+    float rotationSpeed1 = 0.01f;
+    glm::vec3 rotationAxis1 = glm::normalize(glm::vec3(1.0f, 1.0f, 0.0f));
+    glm::quat q1Combined = glm::angleAxis(counter * rotationSpeed1, rotationAxis1);
 
+    glm::mat4 glmMatrix1 = glm::mat4_cast(q1Combined);
+
+    bx::Vec3 pos1 = {-2.0f, 0.0f, 0.0f};
+    glm::mat4 translateMatrix1 = glm::translate(glm::mat4(1.0f), glm::vec3(pos1.x, pos1.y, pos1.z));
+    glm::mat4 combinedMatrix1 = translateMatrix1 * glmMatrix1;
+
+    float finalMatrix1[16];
+    memcpy(finalMatrix1, glm::value_ptr(combinedMatrix1), sizeof(float) * 16);
+
+    bgfx::setTransform(finalMatrix1);
     bgfx::setVertexBuffer(0, vbh);
     bgfx::setIndexBuffer(ibh);
-
     bgfx::submit(0, program);
+
+
+    // Cube 2 (More Varied Rotation)
+    float rotationSpeed2 = 0.05f;
+
+    // Vary the rotation axis over time (using sin/cos for smooth changes)
+    float axisX = glm::sin(counter * 0.01f);
+    float axisY = glm::cos(counter * 0.02f);
+    float axisZ = glm::sin(counter * 0.03f);
+
+    glm::vec3 rotationAxis2 = glm::normalize(glm::vec3(axisX, axisY, axisZ));
+
+    glm::quat q2Combined = glm::angleAxis(counter * rotationSpeed2, rotationAxis2);
+
+    glm::mat4 glmMatrix2 = glm::mat4_cast(q2Combined);
+
+    bx::Vec3 pos2 = {2.0f, 0.0f, 0.0f};
+    glm::mat4 translateMatrix2 = glm::translate(glm::mat4(1.0f), glm::vec3(pos2.x, pos2.y, pos2.z));
+    glm::mat4 combinedMatrix2 = translateMatrix2 * glmMatrix2;
+
+    float finalMatrix2[16];
+    memcpy(finalMatrix2, glm::value_ptr(combinedMatrix2), sizeof(float) * 16);
+
+    bgfx::setTransform(finalMatrix2);
+    bgfx::setVertexBuffer(0, vbh);
+    bgfx::setIndexBuffer(ibh);
+    bgfx::submit(0, program);
+
     bgfx::frame();
     counter++;
 }
