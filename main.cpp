@@ -1,9 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <fstream>
-
-#include <glm/gtc/type_ptr.hpp>
-#include <glm/gtx/quaternion.hpp>
+#include <random>
 
 #include <bgfx/bgfx.h>
 #include <bgfx/platform.h>
@@ -20,6 +18,9 @@
 #define GLFW_EXPOSE_NATIVE_X11
 #include "GLFW/glfw3native.h"
 #endif // __EMSCRIPTEN__
+
+#include <btBulletDynamicsCommon.h>
+#include <btBulletCollisionCommon.h>
 
 //TODO: auto-detect screen dimensions
 const int screenWidth = 1280;
@@ -73,6 +74,91 @@ static const uint16_t cubeTriList[] =
     6, 3, 7,
 };
 
+struct PhysicsWorld {
+    btDefaultCollisionConfiguration* collisionConfig;
+    btCollisionDispatcher* dispatcher;
+    btBroadphaseInterface* broadphase;
+    btSequentialImpulseConstraintSolver* solver;
+    btDiscreteDynamicsWorld* dynamicsWorld;
+
+    btCollisionShape* cubeShape;
+    btRigidBody* cubeRigidBody;
+    btCollisionShape* floorShape;
+    btRigidBody* floorRigidBody;
+
+    PhysicsWorld() {
+        collisionConfig = new btDefaultCollisionConfiguration();
+        dispatcher = new btCollisionDispatcher(collisionConfig);
+        broadphase = new btDbvtBroadphase();
+        solver = new btSequentialImpulseConstraintSolver();
+        dynamicsWorld = new btDiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfig);
+        dynamicsWorld->setGravity(btVector3(0, -9.8, 0));
+
+        // Create cube shape and rigid body
+        cubeShape = new btBoxShape(btVector3(1.0f, 1.0f, 1.0f)); // Adjust size as needed
+        btScalar mass = 1.0f;
+        btVector3 inertia(0, 0, 0); // Declare inertia
+        cubeShape->calculateLocalInertia(mass, inertia);
+        createCubeRigidBodyWithRandomRotation(mass, inertia);
+
+        // Create floor shape and rigid body (static)
+        floorShape = new btBoxShape(btVector3(10.0f, 0.5f, 10.0f)); // Large floor
+        btDefaultMotionState* floorMotionState = new btDefaultMotionState(btTransform(btQuaternion(0, 0, 0, 1), btVector3(0, -2.0f, 0))); // Low position
+        btRigidBody::btRigidBodyConstructionInfo floorRigidBodyCI(0, floorMotionState, floorShape, btVector3(0, 0, 0)); // Mass 0 for static
+        floorRigidBody = new btRigidBody(floorRigidBodyCI);
+        dynamicsWorld->addRigidBody(floorRigidBody);
+    }
+
+    void resetCube()
+    {
+        dynamicsWorld->removeRigidBody(cubeRigidBody);
+
+        btScalar mass = 1.0f;
+        btVector3 inertia(0, 0, 0);
+        cubeShape->calculateLocalInertia(mass, inertia);
+        createCubeRigidBodyWithRandomRotation(mass, inertia);
+
+        cubeRigidBody->activate(true);
+    }
+
+    ~PhysicsWorld() {
+        delete dynamicsWorld;
+        delete solver;
+        delete broadphase;
+        delete dispatcher;
+        delete collisionConfig;
+
+        delete cubeShape;
+        delete floorShape;
+        delete cubeRigidBody->getMotionState();
+        delete cubeRigidBody;
+        delete floorRigidBody->getMotionState();
+        delete floorRigidBody;
+    }
+private:
+    void createCubeRigidBodyWithRandomRotation(btScalar mass, btVector3 inertia)
+    {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<> distrib(0.0, 2.0 * M_PI);
+
+        btQuaternion randomRotation(distrib(gen), distrib(gen), distrib(gen), 1.0f);
+        randomRotation.normalize();
+
+        btDefaultMotionState* cubeMotionState = new btDefaultMotionState(btTransform(randomRotation, btVector3(0, 5, 0)));
+
+        btRigidBody::btRigidBodyConstructionInfo cubeRigidBodyCI(mass, cubeMotionState, cubeShape, inertia);
+        btRigidBody* newCubeRigidBody = new btRigidBody(cubeRigidBodyCI);
+
+        dynamicsWorld->addRigidBody(newCubeRigidBody);
+
+        delete cubeRigidBody;
+        cubeRigidBody = newCubeRigidBody;
+    }
+};
+
+PhysicsWorld physicsWorld;
+
 std::vector<char> readFile(const std::string &filename)
 {
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
@@ -102,6 +188,13 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
         glfwSetWindowShouldClose(window, GLFW_TRUE);
 }
 #endif // __EMSCRIPTEN__
+static void mouse_callback(GLFWwindow* window, int button, int action, int mods)
+{
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+    {
+        physicsWorld.resetCube();
+    }
+}
 
 void renderFrame() {
     const bx::Vec3 at = {0.0f, 0.0f,  0.0f};
@@ -113,46 +206,50 @@ void renderFrame() {
     bx::mtxProj(proj, 60.0f, float(screenWidth) / float(screenHeight), 0.1f, 100.0f, bgfx::getCaps()->homogeneousDepth);
     bgfx::setViewTransform(0, view, proj);
 
-    // Cube 1 (Single Combined Rotation - Same as before)
-    float rotationSpeed1 = 0.01f;
-    glm::vec3 rotationAxis1 = glm::normalize(glm::vec3(1.0f, 1.0f, 0.0f));
-    glm::quat q1Combined = glm::angleAxis(counter * rotationSpeed1, rotationAxis1);
+    // Update physics simulation
+    physicsWorld.dynamicsWorld->stepSimulation(1.0f / 60.0f, 10);
 
-    glm::mat4 glmMatrix1 = glm::mat4_cast(q1Combined);
-
-    bx::Vec3 pos1 = {-2.0f, 0.0f, 0.0f};
-    glm::mat4 translateMatrix1 = glm::translate(glm::mat4(1.0f), glm::vec3(pos1.x, pos1.y, pos1.z));
-    glm::mat4 combinedMatrix1 = translateMatrix1 * glmMatrix1;
-
+    // Cube 1 (Physics-driven with rotation)
+    btTransform trans;
+    physicsWorld.cubeRigidBody->getMotionState()->getWorldTransform(trans);
+    btVector3 pos = trans.getOrigin();
+    btQuaternion rot = trans.getRotation();
+    btTransform combinedTransform;
+    combinedTransform.setIdentity();
+    combinedTransform.setOrigin(pos);
+    combinedTransform.setRotation(rot);
+    btMatrix3x3 rotMatrix = combinedTransform.getBasis();
+    btVector3 transVec = combinedTransform.getOrigin();
     float finalMatrix1[16];
-    memcpy(finalMatrix1, glm::value_ptr(combinedMatrix1), sizeof(float) * 16);
+    rotMatrix.getOpenGLSubMatrix(finalMatrix1);
+    finalMatrix1[12] = transVec.x();
+    finalMatrix1[13] = transVec.y();
+    finalMatrix1[14] = transVec.z();
+    finalMatrix1[15] = 1.0f;
 
     bgfx::setTransform(finalMatrix1);
     bgfx::setVertexBuffer(0, vbh);
     bgfx::setIndexBuffer(ibh);
     bgfx::submit(0, program);
 
-
-    // Cube 2 (More Varied Rotation)
-    float rotationSpeed2 = 0.05f;
-
-    // Vary the rotation axis over time (using sin/cos for smooth changes)
-    float axisX = glm::sin(counter * 0.01f);
-    float axisY = glm::cos(counter * 0.02f);
-    float axisZ = glm::sin(counter * 0.03f);
-
-    glm::vec3 rotationAxis2 = glm::normalize(glm::vec3(axisX, axisY, axisZ));
-
-    glm::quat q2Combined = glm::angleAxis(counter * rotationSpeed2, rotationAxis2);
-
-    glm::mat4 glmMatrix2 = glm::mat4_cast(q2Combined);
-
-    bx::Vec3 pos2 = {2.0f, 0.0f, 0.0f};
-    glm::mat4 translateMatrix2 = glm::translate(glm::mat4(1.0f), glm::vec3(pos2.x, pos2.y, pos2.z));
-    glm::mat4 combinedMatrix2 = translateMatrix2 * glmMatrix2;
-
+    // Cube 2 (Floor - Static)
+    btScalar scaleX2 = 10.0f;
+    btScalar scaleY2 = 0.5f;
+    btScalar scaleZ2 = 10.0f;
+    btMatrix3x3 scaleMatrix2(scaleX2, 0, 0, 0, scaleY2, 0, 0, 0, scaleZ2);
+    btVector3 translateVector2(0.0f, -2.0f, 0.0f);
+    btTransform combinedTransform2;
+    combinedTransform2.setIdentity();
+    combinedTransform2.setBasis(scaleMatrix2);
+    combinedTransform2.setOrigin(translateVector2);
+    btMatrix3x3 rotMatrix2 = combinedTransform2.getBasis();
+    btVector3 transVec2 = combinedTransform2.getOrigin();
     float finalMatrix2[16];
-    memcpy(finalMatrix2, glm::value_ptr(combinedMatrix2), sizeof(float) * 16);
+    rotMatrix2.getOpenGLSubMatrix(finalMatrix2);
+    finalMatrix2[12] = transVec2.x();
+    finalMatrix2[13] = transVec2.y();
+    finalMatrix2[14] = transVec2.z();
+    finalMatrix2[15] = 1.0f;
 
     bgfx::setTransform(finalMatrix2);
     bgfx::setVertexBuffer(0, vbh);
@@ -167,19 +264,24 @@ int main(int argc, char **argv)
 {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // Let bgfx handle rendering API
-    GLFWwindow* window = glfwCreateWindow(screenWidth, screenHeight, "Hello, bgfx-glfw-wasm-3dcube-template-starting-point!", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(screenWidth, screenHeight, "Hello, bullet physics + bgfx + wasm! Click anywhere to restart", NULL, NULL);
     if(!window)
     {
         glfwTerminate();
         return 1;
     }
 
+#ifndef __EMSCRIPTEN__
+    // Linux/X11
+    glfwSetKeyCallback(window, key_callback);
+#endif // __EMSCRIPTEN__
+    glfwSetMouseButtonCallback(window, mouse_callback);
+
     bgfx::PlatformData platformData{};
 
 #ifdef __EMSCRIPTEN__
     platformData.nwh = (void*)"#canvas";
 #else // Linux/X11
-    glfwSetKeyCallback(window, key_callback);
     platformData.nwh = (void*)uintptr_t(glfwGetX11Window(window));
 #endif // __EMSCRIPTEN__
 

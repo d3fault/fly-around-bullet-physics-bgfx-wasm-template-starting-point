@@ -27,12 +27,12 @@
     }
 </style>
 <head>
-<title>bgfx-glfw-wasm-3dcube-template-starting-point</title>
+<title>"Hello, bullet physics + bgfx + wasm! Click anywhere to restart"</title>
 </head>
 <body>
     <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
-        <canvas id="canvas"></canvas>        
-        <div id="moduleStatusString">Downloading bgfx-glfw-wasm-3dcube-template-starting-point...</div>
+        <canvas id="canvas"></canvas>
+        <div id="moduleStatusString">Downloading bullet-physics-bgfx-glfw-wasm-template-starting-point...</div>
     </div>
     <script type="text/javascript">
         let canvas = document.getElementById("canvas");
@@ -43,8 +43,8 @@
             e.preventDefault();
         }
         let resizeCanvas = () => {
-            let scaleX = window.innerWidth / 1920;
-            let scaleY = window.innerHeight / 1080;
+            let scaleX = window.innerWidth / 1280;
+            let scaleY = window.innerHeight / 720;
             let scale = Math.min(scaleX, scaleY);
             canvas.style.transform = `scaleX(${scale}) scaleY(${scale})`;
         }
@@ -90,8 +90,8 @@
         let checkFocus=()=>{
             window.focus();
         }
-        window.setInterval(checkFocus, 1000); 
+        window.setInterval(checkFocus, 1000);
     </script>
-    <script type="text/javascript" src="bgfx-glfw-wasm-3dcube-template-starting-point.js"></script>
+    <script type="text/javascript" src="bullet-physics-bgfx-glfw-wasm-template-starting-point.js"></script>
 </body>
 </html>
