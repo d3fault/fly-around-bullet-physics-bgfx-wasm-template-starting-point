@@ -9,7 +9,7 @@ else()
     message(STATUS "WebAssembly build NOT enabled. EMSDK environment variable is not set. Falling back to native build. If you want to compile for WebAssembly, first `source emsdk_env.sh` in the emsdk directory and then do `mkdir buildwasm && cd buildwasm && emcmake cmake .. && emmake make`")
 endif()
 
-project(bullet-physics-bgfx-glfw-wasm-template-starting-point)
+project(fly-around-bullet-physics-bgfx-wasm-template-starting-point)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
@@ -29,7 +29,7 @@ include_directories(${CMAKE_SOURCE_DIR}/bimg/include)
 
 add_definitions(-DBX_CONFIG_DEBUG)
 
-add_executable(bullet-physics-bgfx-glfw-wasm-template-starting-point main.cpp)
+add_executable(fly-around-bullet-physics-bgfx-wasm-template-starting-point main.cpp)
 
 file(INSTALL DESTINATION ${CMAKE_BINARY_DIR}
     TYPE FILE
@@ -62,7 +62,7 @@ if(DEFINED ENV{EMSDK})
         -s STACK_SIZE=32MB
         -s NO_EXIT_RUNTIME=1")
 
-    target_link_libraries(bullet-physics-bgfx-glfw-wasm-template-starting-point PRIVATE
+    target_link_libraries(fly-around-bullet-physics-bgfx-wasm-template-starting-point PRIVATE
         ${BGFX_DIR}/.build/wasm/bin/bgfxDebug.bc
         ${BGFX_DIR}/.build/wasm/bin/bxDebug.bc
         ${BGFX_DIR}/.build/wasm/bin/bimgDebug.bc)
@@ -71,7 +71,7 @@ if(DEFINED ENV{EMSDK})
         TYPE FILE
         FILES ${CMAKE_SOURCE_DIR}/index.html)
 else() # Native Linux/X11
-    target_link_libraries(bullet-physics-bgfx-glfw-wasm-template-starting-point PRIVATE
+    target_link_libraries(fly-around-bullet-physics-bgfx-wasm-template-starting-point PRIVATE
         glfw
         OpenGL::GL
         ${BGFX_DIR}/.build/linux64_gcc/bin/libbgfx-shared-libDebug.so

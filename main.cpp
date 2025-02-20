@@ -416,7 +416,7 @@ int main(int argc, char **argv)
 {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // Let bgfx handle rendering API
-    window = glfwCreateWindow(screenWidth, screenHeight, "Hello, bullet physics + bgfx + wasm! Click anywhere to restart", NULL, NULL);
+    window = glfwCreateWindow(screenWidth, screenHeight, "Hello, bullet physics + bgfx + wasm! Fly around with kb/mouse! Press E to drop the cube again!", NULL, NULL);
     if(!window)
     {
         glfwTerminate();

@@ -1,8 +1,8 @@
-# bullet physics bgfx glfw wasm template starting point
+# fly around bullet physics bgfx wasm template starting point
 
-Bullet Physics Hello World, a 3D Cube falls onto the ground. Click anywhere to restart. Uses bgfx and glfw3, compiling for WebAssembly (wasm) using Emscripten. Additionally compiles to native Linux/X11. Tested on Debian Bookworm (12), might work on Debian Bullseye (11). Very specific versions of bgfx and Emscripten are targeted; upgrading to newer versions may or may not work.
+Bullet Physics Hello World (with kb/mouse flying), a 3D Cube falls onto the ground. Press Q to quit, press E to drop the cube again. Click anywhere to capture the mouse pointer and press Esc to release the mouse. Uses bgfx and glfw3, compiling for WebAssembly (wasm) using Emscripten. Additionally compiles to native Linux/X11. Tested on Debian Bookworm (12), might work on Debian Bullseye (11). Very specific versions of bgfx and Emscripten are targeted; upgrading to newer versions may or may not work.
 
-[Demo](http://d3fault.github.io/wasm-3d-demos/bullet-physics-bgfx-glfw-wasm-template-starting-point/index.html)
+[Demo](http://d3fault.github.io/wasm-3d-demos/fly-around-bullet-physics-bgfx-wasm-template-starting-point/index.html)
 
 ## WebAssembly
 
@@ -21,8 +21,8 @@ Bullet Physics Hello World, a 3D Cube falls onto the ground. Click anywhere to r
 
 ### Building (WebAssembly)
 
-* `git clone https://github.com/d3fault/bullet-physics-bgfx-glfw-wasm-template-starting-point.git`
-* `cd bullet-physics-bgfx-glfw-wasm-template-starting-point`
+* `git clone https://github.com/d3fault/fly-around-bullet-physics-bgfx-wasm-template-starting-point.git`
+* `cd fly-around-bullet-physics-bgfx-wasm-template-starting-point`
 * `git submodule update --init --recursive`
 * `cd bgfx`
 * `emmake make wasm-debug #it will probably error out on one of the examples, this is fine. just make sure bgfxDebug.bc, bxDebug.bc, and bimgDebug.bc exist in bgfx/.build/wasm/bin/`
@@ -44,8 +44,8 @@ Bullet Physics Hello World, a 3D Cube falls onto the ground. Click anywhere to r
 
 ### Building (Linux/X11)
 
-* `git clone https://github.com/d3fault/bullet-physics-bgfx-glfw-wasm-template-starting-point.git`
-* `cd bullet-physics-bgfx-glfw-wasm-template-starting-point`
+* `git clone https://github.com/d3fault/fly-around-bullet-physics-bgfx-wasm-template-starting-point.git`
+* `cd fly-around-bullet-physics-bgfx-wasm-template-starting-point`
 * `git submodule update --init --recursive`
 * `cd bgfx`
 * `make linux-debug64 #it might error out on one of the examples, this is fine. just make sure libbgfx-shared-libDebug.so exists in bgfx/.build/linux64_gcc/bin/`
@@ -56,7 +56,7 @@ Bullet Physics Hello World, a 3D Cube falls onto the ground. Click anywhere to r
 
 ### Running (Linux/X11)
 
-* `./bullet-physics-bgfx-glfw-wasm-template-starting-point`
+* `./fly-around-bullet-physics-bgfx-wasm-template-starting-point`
 
 ## TODO (patches welcome)
 
