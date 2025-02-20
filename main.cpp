@@ -2,6 +2,7 @@
 #include <vector>
 #include <fstream>
 #include <random>
+#include <unordered_set>
 
 #include <bgfx/bgfx.h>
 #include <bgfx/platform.h>
@@ -47,8 +48,9 @@ float cameraPitch = 0.0f;
 float cameraYaw = 0.0f;
 const float mouseSensitivity = 0.1f;
 bx::Vec3 eye = {0.0f, 0.0f, -5.0f};
-bx::Vec3 at = {0.0f, 0.0f, 0.0f};
-float view[16]; // View matrix
+
+std::unordered_set<int> pressedKeys;
+const float moveSpeed = 0.1f;
 
 const double TARGET_FPS = 60.0;
 const double FRAME_DURATION = 1.0 / TARGET_FPS;
@@ -97,7 +99,7 @@ struct PhysicsWorld {
     btDiscreteDynamicsWorld* dynamicsWorld;
 
     btCollisionShape* cubeShape;
-    btRigidBody* cubeRigidBody;
+    btRigidBody* cubeRigidBody = nullptr;
     btCollisionShape* floorShape;
     btRigidBody* floorRigidBody;
 
@@ -167,7 +169,11 @@ private:
 
         dynamicsWorld->addRigidBody(newCubeRigidBody);
 
-        delete cubeRigidBody;
+        if(cubeRigidBody)
+        {
+            delete cubeRigidBody->getMotionState();
+            delete cubeRigidBody;
+        }
         cubeRigidBody = newCubeRigidBody;
     }
 };
@@ -234,7 +240,14 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
             pointerLocked = false;
 #endif // __EMSCRIPTEN__
             break;
+        default:
+            pressedKeys.insert(key);
+            break;
         }
+    }
+    else if(action == GLFW_RELEASE)
+    {
+        pressedKeys.erase(key);
     }
 }
 static void mouse_click_callback(GLFWwindow* window, int button, int action, int mods)
@@ -280,15 +293,35 @@ void renderFrame() {
     forward.x = cosf(radPitch) * sinf(radYaw);
     forward.y = sinf(radPitch);
     forward.z = cosf(radPitch) * cosf(radYaw);
+    forward = bx::normalize(forward);
+    bx::Vec3 right = bx::normalize(bx::cross({0.0f, 1.0f, 0.0f}, forward));
 
-    //bx::Vec3 right = bx::cross({0.0f, 1.0f, 0.0f}, forward);
-    //bx::Vec3 up = bx::cross(forward, right);
+    // WASD movement
+    bx::Vec3 moveDirection = {0.0f, 0.0f, 0.0f};
+    if (pressedKeys.count(GLFW_KEY_W) || pressedKeys.count(GLFW_KEY_UP)) {
+        moveDirection = bx::add(moveDirection, forward);
+    }
+    if (pressedKeys.count(GLFW_KEY_S) || pressedKeys.count(GLFW_KEY_DOWN)) {
+        moveDirection = bx::sub(moveDirection, forward);
+    }
+    if (pressedKeys.count(GLFW_KEY_A) || pressedKeys.count(GLFW_KEY_LEFT)) {
+        moveDirection = bx::sub(moveDirection, right);
+    }
+    if (pressedKeys.count(GLFW_KEY_D) || pressedKeys.count(GLFW_KEY_RIGHT)) {
+        moveDirection = bx::add(moveDirection, right);
+    }
 
-    at = bx::add(eye, forward);
+    if (bx::length(moveDirection) > 0.0f) {
+        moveDirection = bx::normalize(moveDirection);
+        eye = bx::add(eye, bx::mul(moveDirection, moveSpeed));
+    }
+
+    bx::Vec3 at = bx::add(eye, forward);
+    float view[16];
     bx::mtxLookAt(view, eye, at);
 
     float proj[16];
-    bx::mtxProj(proj, 60.0f, float(screenWidth) / float(screenHeight), 0.1f, 100.0f, bgfx::getCaps()->homogeneousDepth);
+    bx::mtxProj(proj, 60.0f, float(screenWidth) / float(screenHeight), 0.05f, 150.0f, bgfx::getCaps()->homogeneousDepth);
     bgfx::setViewTransform(0, view, proj);
 
     // Update physics simulation
@@ -434,7 +467,7 @@ int main(int argc, char **argv)
     bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x443355FF, 1.0f, 0);
 
 #if __EMSCRIPTEN__
-    emscripten_set_main_loop(renderFrame, 0, 0);
+    emscripten_set_main_loop(renderFrame, 0, true);
 #else // Linux/X11
     while(!glfwWindowShouldClose(window)) {
         auto frameStart = std::chrono::high_resolution_clock::now();
