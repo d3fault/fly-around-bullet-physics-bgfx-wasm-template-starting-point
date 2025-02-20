@@ -29,8 +29,10 @@
 #include <btBulletCollisionCommon.h>
 
 //TODO: auto-detect screen dimensions
-const int screenWidth = 1280;
-const int screenHeight = 720;
+int screenWidth = 1280;
+int screenHeight = 720;
+
+GLFWwindow* window;
 
 std::vector<char> vertexShaderCode;
 bgfx::ShaderHandle vertexShader;
@@ -41,13 +43,18 @@ bgfx::VertexBufferHandle vbh;
 bgfx::IndexBufferHandle ibh;
 bgfx::ProgramHandle program;
 
+struct MyPointF {
+    double x;
+    double y;
+};
+
 bool pointerLocked = false;
-double lastMouseX = 0.0f;
-double lastMouseY = 0.0f;
+MyPointF lastMousePos = {0.0f, 0.0f};
 float cameraPitch = 0.0f;
 float cameraYaw = 0.0f;
 const float mouseSensitivity = 0.1f;
 bx::Vec3 eye = {0.0f, 0.0f, -5.0f};
+MyPointF center;
 
 std::unordered_set<int> pressedKeys;
 const float moveSpeed = 0.1f;
@@ -180,6 +187,17 @@ private:
 
 PhysicsWorld physicsWorld;
 
+void recalculateCenter()
+{
+    center.x = screenWidth/2;
+    center.y = screenHeight/2;
+}
+void recenterMouse()
+{
+    lastMousePos = center;
+    glfwSetCursorPos(window, center.x, center.y);
+}
+
 std::vector<char> readFile(const std::string &filename)
 {
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
@@ -235,9 +253,8 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
             emscripten_exit_pointerlock();
             std::cout << "manually requesting emscripten_exit_pointerlock. i'm not sure if this will be called because ESC *always* releases pointer lock" << std::endl;
 #else //Linux/X11
-            //TODO: Linux/X11
-            //to decrease dupe code, maybe just call the emscripten pointerlock_callback here (but also disable cursor hiding and mouse recentering)
             pointerLocked = false;
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 #endif // __EMSCRIPTEN__
             break;
         default:
@@ -261,10 +278,9 @@ static void mouse_click_callback(GLFWwindow* window, int button, int action, int
         } else {
             std::cout << "Failed to request pointer lock, error code: " << result << std::endl;
         }
-#else
-        //TODO: Linux/X11
-        //to decrease dupe code, maybe just call the emscripten pointerlock_callback here (but also set up cursor hiding and mouse recentering)
+#else // Linux/X11
         pointerLocked = true;
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
 #endif // __EMSCRIPTEN__
     }
 }
@@ -273,17 +289,35 @@ void mouse_move_callback(GLFWwindow* window, double xpos, double ypos)
 {
     if(pointerLocked)
     {
-        double dx = xpos - lastMouseX;
-        double dy = ypos - lastMouseY;
+        double dx = xpos - lastMousePos.x;
+        double dy = ypos - lastMousePos.y;
 
         cameraYaw += dx * mouseSensitivity;
         cameraPitch -= dy * mouseSensitivity;
 
         cameraPitch = bx::clamp(cameraPitch, -89.0f, 89.0f);
     }
-    lastMouseX = xpos;
-    lastMouseY = ypos;
+    lastMousePos = {xpos, ypos};
+
+#ifndef __EMSCRIPTEN__
+// Linux/X11
+    if(pointerLocked)
+        recenterMouse();
+#endif // __EMSCRIPTEN__
 }
+
+#ifndef __EMSCRIPTEN__
+// Linux/X11
+void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+    if (width > 0 && height > 0) {
+        bgfx::reset(width, height, BGFX_RESET_VSYNC);
+        bgfx::setViewRect(0, 0, 0, width, height);
+        screenWidth = width;
+        screenHeight = height;
+        recalculateCenter();
+    }
+}
+#endif // __EMSCRIPTEN__
 
 void renderFrame() {
     float radYaw = bx::toRad(cameraYaw);
@@ -382,12 +416,13 @@ int main(int argc, char **argv)
 {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // Let bgfx handle rendering API
-    GLFWwindow* window = glfwCreateWindow(screenWidth, screenHeight, "Hello, bullet physics + bgfx + wasm! Click anywhere to restart", NULL, NULL);
+    window = glfwCreateWindow(screenWidth, screenHeight, "Hello, bullet physics + bgfx + wasm! Click anywhere to restart", NULL, NULL);
     if(!window)
     {
         glfwTerminate();
         return 1;
     }
+    recalculateCenter();
 
 #ifdef __EMSCRIPTEN__
     emscripten_set_pointerlockchange_callback(EMSCRIPTEN_EVENT_TARGET_DOCUMENT, nullptr, EM_TRUE, pointerlock_callback);
@@ -403,6 +438,7 @@ int main(int argc, char **argv)
     platformData.nwh = (void*)MY_EMSCRIPTEN_CANVAS_CSS_SELECTOR;
 #else // Linux/X11
     platformData.nwh = (void*)uintptr_t(glfwGetX11Window(window));
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 #endif // __EMSCRIPTEN__
 
     platformData.context = NULL;
