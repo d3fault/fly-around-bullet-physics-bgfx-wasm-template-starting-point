@@ -59,7 +59,7 @@ if(DEFINED ENV{EMSDK})
         -s GL_ENABLE_GET_PROC_ADDRESS \
         -static \
         -s ALLOW_MEMORY_GROWTH=1 \
-        -s STACK_SIZE=32MB
+        -s STACK_SIZE=8MB \
         -s NO_EXIT_RUNTIME=1")
 
     target_link_libraries(fly-around-bullet-physics-bgfx-wasm-template-starting-point PRIVATE
