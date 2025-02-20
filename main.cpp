@@ -8,15 +8,20 @@
 #include "bx/math.h"
 
 #if __EMSCRIPTEN__
+
 #include <emscripten.h>
+#include <emscripten/html5.h>
 #include "GLFW/glfw3.h"
+#define MY_EMSCRIPTEN_CANVAS_CSS_SELECTOR "#canvas"
+
 #else // Linux/X11
+
 #include <chrono>
 #include <algorithm>
-
 #include "GLFW/glfw3.h"
 #define GLFW_EXPOSE_NATIVE_X11
 #include "GLFW/glfw3native.h"
+
 #endif // __EMSCRIPTEN__
 
 #include <btBulletDynamicsCommon.h>
@@ -34,6 +39,16 @@ unsigned int counter = 0;
 bgfx::VertexBufferHandle vbh;
 bgfx::IndexBufferHandle ibh;
 bgfx::ProgramHandle program;
+
+bool pointerLocked = false;
+double lastMouseX = 0.0f;
+double lastMouseY = 0.0f;
+float cameraPitch = 0.0f;
+float cameraYaw = 0.0f;
+const float mouseSensitivity = 0.1f;
+bx::Vec3 eye = {0.0f, 0.0f, -5.0f};
+bx::Vec3 at = {0.0f, 0.0f, 0.0f};
+float view[16]; // View matrix
 
 const double TARGET_FPS = 60.0;
 const double FRAME_DURATION = 1.0 / TARGET_FPS;
@@ -180,28 +195,98 @@ std::vector<char> readFile(const std::string &filename)
     return buffer;
 }
 
-#ifndef __EMSCRIPTEN__
-// Linux/X11
-static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
-{
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, GLFW_TRUE);
+#ifdef __EMSCRIPTEN__
+EM_BOOL pointerlock_callback(int eventType, const EmscriptenPointerlockChangeEvent* event, void* userData) {
+    if (event->isActive) {
+        std::cout << "Pointer lock activated." << std::endl;
+        pointerLocked = true;
+    } else {
+        std::cout << "Pointer lock released." << std::endl;
+        pointerLocked = false;
+    }
+    return EM_TRUE; // Indicate the event was handled
 }
 #endif // __EMSCRIPTEN__
-static void mouse_callback(GLFWwindow* window, int button, int action, int mods)
+
+static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    if(action == GLFW_PRESS)
+    {
+        switch(key)
+        {
+#ifndef __EMSCRIPTEN__
+        // Linux/X11
+        case GLFW_KEY_Q:
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
+            break;
+#endif
+        case GLFW_KEY_E:
+            physicsWorld.resetCube();
+            break;
+        case GLFW_KEY_ESCAPE:
+#ifdef __EMSCRIPTEN__
+            //unlock pointer lock
+            emscripten_exit_pointerlock();
+            std::cout << "manually requesting emscripten_exit_pointerlock. i'm not sure if this will be called because ESC *always* releases pointer lock" << std::endl;
+#else //Linux/X11
+            //TODO: Linux/X11
+            //to decrease dupe code, maybe just call the emscripten pointerlock_callback here (but also disable cursor hiding and mouse recentering)
+            pointerLocked = false;
+#endif // __EMSCRIPTEN__
+            break;
+        }
+    }
+}
+static void mouse_click_callback(GLFWwindow* window, int button, int action, int mods)
 {
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
     {
-        physicsWorld.resetCube();
+#ifdef __EMSCRIPTEN__
+        EMSCRIPTEN_RESULT result = emscripten_request_pointerlock(MY_EMSCRIPTEN_CANVAS_CSS_SELECTOR, EM_FALSE);
+        if (result == EMSCRIPTEN_RESULT_SUCCESS) {
+            std::cout << "Pointer lock requested successfully." << std::endl;
+        } else {
+            std::cout << "Failed to request pointer lock, error code: " << result << std::endl;
+        }
+#else
+        //TODO: Linux/X11
+        //to decrease dupe code, maybe just call the emscripten pointerlock_callback here (but also set up cursor hiding and mouse recentering)
+        pointerLocked = true;
+#endif // __EMSCRIPTEN__
     }
 }
 
-void renderFrame() {
-    const bx::Vec3 at = {0.0f, 0.0f,  0.0f};
-    const bx::Vec3 eye = {0.0f, 0.0f, -5.0f};
+void mouse_move_callback(GLFWwindow* window, double xpos, double ypos)
+{
+    if(pointerLocked)
+    {
+        double dx = xpos - lastMouseX;
+        double dy = ypos - lastMouseY;
 
-    float view[16];
+        cameraYaw += dx * mouseSensitivity;
+        cameraPitch -= dy * mouseSensitivity;
+
+        cameraPitch = bx::clamp(cameraPitch, -89.0f, 89.0f);
+    }
+    lastMouseX = xpos;
+    lastMouseY = ypos;
+}
+
+void renderFrame() {
+    float radYaw = bx::toRad(cameraYaw);
+    float radPitch = bx::toRad(cameraPitch);
+
+    bx::Vec3 forward = {0.0f, 0.0f, 1.0f};
+    forward.x = cosf(radPitch) * sinf(radYaw);
+    forward.y = sinf(radPitch);
+    forward.z = cosf(radPitch) * cosf(radYaw);
+
+    //bx::Vec3 right = bx::cross({0.0f, 1.0f, 0.0f}, forward);
+    //bx::Vec3 up = bx::cross(forward, right);
+
+    at = bx::add(eye, forward);
     bx::mtxLookAt(view, eye, at);
+
     float proj[16];
     bx::mtxProj(proj, 60.0f, float(screenWidth) / float(screenHeight), 0.1f, 100.0f, bgfx::getCaps()->homogeneousDepth);
     bgfx::setViewTransform(0, view, proj);
@@ -271,16 +356,18 @@ int main(int argc, char **argv)
         return 1;
     }
 
-#ifndef __EMSCRIPTEN__
-    // Linux/X11
-    glfwSetKeyCallback(window, key_callback);
+#ifdef __EMSCRIPTEN__
+    emscripten_set_pointerlockchange_callback(EMSCRIPTEN_EVENT_TARGET_DOCUMENT, nullptr, EM_TRUE, pointerlock_callback);
 #endif // __EMSCRIPTEN__
-    glfwSetMouseButtonCallback(window, mouse_callback);
+
+    glfwSetKeyCallback(window, key_callback);
+    glfwSetMouseButtonCallback(window, mouse_click_callback);
+    glfwSetCursorPosCallback(window, mouse_move_callback);
 
     bgfx::PlatformData platformData{};
 
 #ifdef __EMSCRIPTEN__
-    platformData.nwh = (void*)"#canvas";
+    platformData.nwh = (void*)MY_EMSCRIPTEN_CANVAS_CSS_SELECTOR;
 #else // Linux/X11
     platformData.nwh = (void*)uintptr_t(glfwGetX11Window(window));
 #endif // __EMSCRIPTEN__
