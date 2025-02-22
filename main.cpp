@@ -168,13 +168,20 @@ private:
         std::mt19937 gen(rd());
         std::uniform_real_distribution<> distrib(0.0, 2.0 * M_PI);
 
-        btQuaternion randomRotation(distrib(gen), distrib(gen), distrib(gen), 1.0f);
-        randomRotation.normalize();
+#if 1 //random rotation
+        btQuaternion randomRotation(btVector3(0, 1, 0), distrib(gen)); // Rotate around Y-axis
 
         btDefaultMotionState* cubeMotionState = new btDefaultMotionState(btTransform(randomRotation, btVector3(0, 5, 0)));
+#else
+        btDefaultMotionState* cubeMotionState = new btDefaultMotionState(btTransform(btQuaternion(0, 0, 0, 1), btVector3(0, 5, 0)));
+#endif
 
         btRigidBody::btRigidBodyConstructionInfo cubeRigidBodyCI(mass, cubeMotionState, cubeShape, inertia);
         btRigidBody* newCubeRigidBody = new btRigidBody(cubeRigidBodyCI);
+
+        newCubeRigidBody->setAngularFactor(btVector3(0, 0, 0)); //don't let the cube tilt/fall over
+        newCubeRigidBody->setDamping(0.3f, 0.0f);
+        newCubeRigidBody->setFriction(0.2f);
 
         dynamicsWorld->addRigidBody(newCubeRigidBody);
 
@@ -321,7 +328,84 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
 }
 #endif // __EMSCRIPTEN__
 
+void cubeKeyboardControls()
+{
+    // Track which keys are pressed in the current frame
+    btVector3 cubeVelocity = physicsWorld.cubeRigidBody->getLinearVelocity();
+    const float maxSpeed = 20.0f;
+    const float accelerationFactor = 100.0f;
+    const float decelerationFactor = 50.0f; // Factor to slow down the cube when no key is pressed
+
+    btTransform transform1;
+    physicsWorld.cubeRigidBody->getMotionState()->getWorldTransform(transform1);
+    btVector3 cubeForward = transform1.getBasis().getColumn(2); // Assuming Z+ is cubeForward
+    btVector3 cubeRight = transform1.getBasis().getColumn(0);   // Assuming X+ is cubeRight
+
+    // Initialize forces for each direction
+    btVector3 combinedForce(0, 0, 0);
+    btVector3 counterForce(0, 0, 0);
+
+    if (pressedKeys.count(GLFW_KEY_UP))
+    {
+        combinedForce += cubeForward * accelerationFactor;
+    }
+    if (pressedKeys.count(GLFW_KEY_DOWN))
+    {
+        combinedForce += cubeForward * -accelerationFactor;
+    }
+    if (pressedKeys.count(GLFW_KEY_LEFT))
+    {
+        combinedForce += cubeRight * -accelerationFactor;
+    }
+    if (pressedKeys.count(GLFW_KEY_RIGHT))
+    {
+        combinedForce += cubeRight * accelerationFactor;
+    }
+
+    // Apply the combined force if there is any
+    if (combinedForce.length() > 0)
+    {
+        btScalar speed = cubeVelocity.dot(combinedForce.normalized()); // Calculate speed in the direction of the combined force
+        if (speed < maxSpeed)
+        {
+            physicsWorld.cubeRigidBody->activate();
+            physicsWorld.cubeRigidBody->applyCentralForce(combinedForce);
+        }
+        // Clamp velocity to prevent exceeding max speed
+        if (speed > maxSpeed)
+        {
+            btVector3 clampedVelocity = combinedForce.normalized() * maxSpeed;
+            clampedVelocity.setY(cubeVelocity.getY()); // Preserve vertical velocity
+            physicsWorld.cubeRigidBody->setLinearVelocity(clampedVelocity);
+        }
+    }
+
+    // Stopping. Calculate counter-force for each axis based on current velocity
+    if (cubeVelocity.length() > 0.1f)
+    {
+        btVector3 counterForce(0, 0, 0);
+        // Apply counter-force along the local forward axis (Z) if neither Up nor Down is pressed
+        if (!pressedKeys.count(GLFW_KEY_UP) && !pressedKeys.count(GLFW_KEY_DOWN))
+        {
+            btScalar speedZ = cubeVelocity.dot(cubeForward); // Velocity along forward axis
+            counterForce += cubeForward * (-speedZ * decelerationFactor);
+        }
+        // Apply counter-force along the local right axis (X) if neither Left nor Right is pressed
+        if (!pressedKeys.count(GLFW_KEY_LEFT) && !pressedKeys.count(GLFW_KEY_RIGHT))
+        {
+            btScalar speedX = cubeVelocity.dot(cubeRight); // Velocity along right axis
+            counterForce += cubeRight * (-speedX * decelerationFactor);
+        }
+        // Apply counter-force if non-zero
+        if (counterForce.length() > 0)
+        {
+            physicsWorld.cubeRigidBody->applyCentralForce(counterForce);
+        }
+    }
+}
+
 void renderFrame() {
+
     float radYaw = bx::toRad(cameraYaw);
     float radPitch = bx::toRad(cameraPitch);
 
@@ -332,18 +416,18 @@ void renderFrame() {
     forward = bx::normalize(forward);
     bx::Vec3 right = bx::normalize(bx::cross({0.0f, 1.0f, 0.0f}, forward));
 
-    // WASD movement
+    // WASD camera movement
     bx::Vec3 moveDirection = {0.0f, 0.0f, 0.0f};
-    if (pressedKeys.count(GLFW_KEY_W) || pressedKeys.count(GLFW_KEY_UP)) {
+    if (pressedKeys.count(GLFW_KEY_W)) {
         moveDirection = bx::add(moveDirection, forward);
     }
-    if (pressedKeys.count(GLFW_KEY_S) || pressedKeys.count(GLFW_KEY_DOWN)) {
+    if (pressedKeys.count(GLFW_KEY_S)) {
         moveDirection = bx::sub(moveDirection, forward);
     }
-    if (pressedKeys.count(GLFW_KEY_A) || pressedKeys.count(GLFW_KEY_LEFT)) {
+    if (pressedKeys.count(GLFW_KEY_A)) {
         moveDirection = bx::sub(moveDirection, right);
     }
-    if (pressedKeys.count(GLFW_KEY_D) || pressedKeys.count(GLFW_KEY_RIGHT)) {
+    if (pressedKeys.count(GLFW_KEY_D)) {
         moveDirection = bx::add(moveDirection, right);
     }
 
@@ -351,6 +435,8 @@ void renderFrame() {
         moveDirection = bx::normalize(moveDirection);
         eye = bx::add(eye, bx::mul(moveDirection, moveSpeed));
     }
+
+    cubeKeyboardControls();
 
     bx::Vec3 at = bx::add(eye, forward);
     float view[16];
