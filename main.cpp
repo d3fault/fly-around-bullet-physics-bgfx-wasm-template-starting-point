@@ -1,3 +1,4 @@
+#include <memory>
 #include <iostream>
 #include <vector>
 #include <fstream>
@@ -26,6 +27,10 @@
 
 #include <btBulletDynamicsCommon.h>
 #include <btBulletCollisionCommon.h>
+
+#include "bgfx2doverlaytext_dynamicallysized.h"
+#include "bgfx2doverlaytext_staticallysized.h"
+#include "lolreadfile.h"
 
 //TODO: auto-detect screen dimensions
 int screenWidth = 1280;
@@ -63,6 +68,9 @@ const double FRAME_DURATION_FOR_BOTH_GFX_AND_PHYSICS_IF_WE_CANT_DETERMINE_REFRES
 
 float fixedTimeStep_aka_1overRefreshRate = FRAME_DURATION_FOR_BOTH_GFX_AND_PHYSICS_IF_WE_CANT_DETERMINE_REFRESH_RATE; //TODO: Hardcoded 60hz *bullet physics* refresh rate for WASM. there's no [clean] way to get refresh rate from browser aside from benchmarking in js and no thanks. and we can't just use the calculated timeStep in renderFrame because apparently having it vary slightly each time makes bullet cry. i guess it's in the name "fixed"
 std::chrono::high_resolution_clock::time_point lastFrameTimePoint = std::chrono::high_resolution_clock::now();
+
+std::unique_ptr<Bgfx2DOverlayText_DynamicallySized> dynamicOverlay;
+std::unique_ptr<Bgfx2DOverlayText_StaticallySized> staticOverlay;
 
 struct PosColorVertex
 {
@@ -205,27 +213,6 @@ void recenterMouse()
 {
     lastMousePos = center;
     glfwSetCursorPos(window, center.x, center.y);
-}
-
-std::vector<char> readFile(const std::string &filename)
-{
-    std::ifstream file(filename, std::ios::ate | std::ios::binary);
-
-    if (!file.is_open())
-    {
-        std::string error = "failed to open file: " + filename;
-        throw std::runtime_error(error);
-    }
-
-    std::size_t fileSize = (std::size_t)file.tellg();
-    std::vector<char> buffer(fileSize);
-
-    file.seekg(0);
-    file.read(buffer.data(), fileSize);
-
-    file.close();
-
-    return buffer;
 }
 
 #ifdef __EMSCRIPTEN__
@@ -406,6 +393,8 @@ void cubeKeyboardControls()
 
 void renderFrame() {
 
+    bgfx::setState(BGFX_STATE_DEFAULT | BGFX_STATE_BLEND_ALPHA);
+
     float radYaw = bx::toRad(cameraYaw);
     float radPitch = bx::toRad(cameraPitch);
 
@@ -492,13 +481,17 @@ void renderFrame() {
         bgfx::submit(0, program);
     }
 
+    staticOverlay->render(screenWidth, screenHeight);
+    dynamicOverlay->render(screenWidth, screenHeight);
+
     bgfx::frame();
     counter++;
 }
 
 int main(int argc, char **argv)
 {
-    glfwInit();
+    if(!glfwInit())
+        return -1;
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // Let bgfx handle rendering API
     window = glfwCreateWindow(screenWidth, screenHeight, "Hello, bullet physics + bgfx + wasm! Fly around with kb/mouse! Press E to drop the cube again!", NULL, NULL);
     if(!window)
@@ -541,6 +534,7 @@ int main(int argc, char **argv)
 
     bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x443355FF, 1.0f, 0);
     bgfx::setViewRect(0, 0, 0, screenWidth, screenHeight);
+    bgfx::setViewRect(1, 0, 0, screenWidth, screenHeight);
 
     bgfx::VertexLayout pcvDecl;
     pcvDecl.begin()
@@ -581,6 +575,9 @@ int main(int argc, char **argv)
         std::cout << "Shader program create success!" << std::endl;
     }
 
+    dynamicOverlay.reset(new Bgfx2DOverlayText_DynamicallySized(75.0f, 75.0f, "Press Q to Quit, E to drop the Cube again, Left-click to start flying around, Esc to stop flying around, WASD to move camera, Arrow Keys to move cube (cube spawns facing random direction and there's no way to rotate it atm)", 22, gil::rgba8_pixel_t(255, 0, 0, 220)));
+    staticOverlay.reset(new Bgfx2DOverlayText_StaticallySized(256, 64, 5, 5, "hello, world", 32, gil::rgba8_pixel_t(0, 0, 255, 100)));
+
     lastFrameTimePoint = std::chrono::high_resolution_clock::now();
 #if __EMSCRIPTEN__
     emscripten_set_main_loop(renderFrame, 0, true);
@@ -607,6 +604,9 @@ int main(int argc, char **argv)
             elapsedSeconds = std::chrono::duration<double>(currentTime - frameStart).count();
         } while (elapsedSeconds < targetFrameDuration);
     }
+
+    staticOverlay.reset();
+    dynamicOverlay.reset();
 
     bgfx::destroy(program);
     bgfx::destroy(fragmentShader);

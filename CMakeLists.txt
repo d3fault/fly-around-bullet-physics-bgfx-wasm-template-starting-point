@@ -11,17 +11,63 @@ endif()
 
 project(fly-around-bullet-physics-bgfx-wasm-template-starting-point)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 
 set(BGFX_DIR ${CMAKE_SOURCE_DIR}/bgfx)
 
-if(NOT DEFINED ENV{EMSDK})
+if(DEFINED ENV{EMSDK})
+    set(BGFX_BUILD_DIR ${BGFX_DIR}/.build/wasm)
+else()
+    set(BGFX_BUILD_DIR ${BGFX_DIR}/.build/linux64_gcc)
     find_package(glfw3 REQUIRED)
     find_package(OpenGL REQUIRED)
     find_package(Bullet COMPONENTS BulletCollision BulletDynamics REQUIRED)
+    find_package(Freetype REQUIRED)
     include_directories(${BULLET_INCLUDE_DIR})
 endif()
+
+set(BGFX_SHADERC ${BGFX_BUILD_DIR}/bin/shadercDebug)
+
+# Function to compile shaders
+function(compile_shader INPUT_FILE OUTPUT_FILE TYPE)
+    add_custom_command(
+        OUTPUT ${OUTPUT_FILE}
+        COMMAND ${BGFX_SHADERC}
+            -f ${CMAKE_SOURCE_DIR}/${INPUT_FILE}        # Input shader source
+            -o ${CMAKE_BINARY_DIR}/${OUTPUT_FILE}       # Output compiled shader
+            --type ${TYPE}          # Shader type: vertex or fragment
+            --varyingdef ${BGFX_DIR}/src/varying.def.sc
+            --platform linux        # Change this depending on your platform
+            --verbose
+            -i ${BGFX_DIR}/src
+        DEPENDS ${INPUT_FILE}
+        COMMENT "Compiling shader: ${INPUT_FILE} "
+    )
+    message(STATUS "Compiling shader: ${INPUT_FILE} of type ${TYPE}")
+endfunction()
+set(SHADERS
+    vs_overlay.sc
+    fs_overlay.sc
+)
+foreach(SHADER ${SHADERS})
+    get_filename_component(SHADER_NAME ${SHADER} NAME_WE)
+    set(INPUT_SHADER ${SHADER})
+    set(OUTPUT_SHADER ${SHADER_NAME}.bin)
+
+    # Detect shader type from filename
+    if(SHADER_NAME MATCHES "^vs_")
+        set(SHADER_TYPE "vertex")
+    elseif(SHADER_NAME MATCHES "^fs_")
+        set(SHADER_TYPE "fragment")
+    else()
+        message(FATAL_ERROR "Unknown shader type for ${SHADER_NAME}")
+    endif()
+
+    compile_shader(${INPUT_SHADER} ${OUTPUT_SHADER} ${SHADER_TYPE})
+endforeach()
+# Ensure shaders are built before the main target
+add_custom_target(compile_shaders DEPENDS vs_overlay.bin fs_overlay.bin)
 
 include_directories(${BGFX_DIR}/include)
 include_directories(${CMAKE_SOURCE_DIR}/bx/include)
@@ -29,12 +75,14 @@ include_directories(${CMAKE_SOURCE_DIR}/bimg/include)
 
 add_definitions(-DBX_CONFIG_DEBUG)
 
-add_executable(fly-around-bullet-physics-bgfx-wasm-template-starting-point main.cpp)
+add_executable(fly-around-bullet-physics-bgfx-wasm-template-starting-point main.cpp bgfx2doverlaytext_dynamicallysized.cpp bgfx2doverlaytext_dynamicallysized.h bgfx2doverlaytext_staticallysized.cpp bgfx2doverlaytext_staticallysized.h lolreadfile.h lolreadfile.cpp)
 
 file(INSTALL DESTINATION ${CMAKE_BINARY_DIR}
     TYPE FILE
     FILES ${BGFX_DIR}/examples/runtime/shaders/glsl/vs_cubes.bin
-    ${BGFX_DIR}/examples/runtime/shaders/glsl/fs_cubes.bin)
+    ${BGFX_DIR}/examples/runtime/shaders/glsl/fs_cubes.bin
+    Vegur-Regular.ttf
+    )
 
 if(DEFINED ENV{EMSDK})
     set(CMAKE_CXX_FLAGS "-s MIN_WEBGL_VERSION=2 \
@@ -43,6 +91,9 @@ if(DEFINED ENV{EMSDK})
         -fexceptions \
         --preload-file vs_cubes.bin \
         --preload-file fs_cubes.bin \
+        --preload-file vs_overlay.bin \
+        --preload-file fs_overlay.bin \
+        --preload-file Vegur-Regular.ttf \
         --bind \
         --use-preload-plugins \
         -Wall \
@@ -55,6 +106,8 @@ if(DEFINED ENV{EMSDK})
         -Os \
         -s USE_GLFW=3 \
         -s USE_BULLET=1 \
+        -s USE_BOOST_HEADERS=1 \
+        -s USE_FREETYPE=1 \
         --no-heap-copy \
         -s GL_ENABLE_GET_PROC_ADDRESS \
         -static \
@@ -75,5 +128,8 @@ else() # Native Linux/X11
         glfw
         OpenGL::GL
         ${BGFX_DIR}/.build/linux64_gcc/bin/libbgfx-shared-libDebug.so
-	${BULLET_LIBRARIES})
+        ${BULLET_LIBRARIES}
+        Freetype::Freetype
+        )
 endif()
+add_dependencies(fly-around-bullet-physics-bgfx-wasm-template-starting-point compile_shaders)
