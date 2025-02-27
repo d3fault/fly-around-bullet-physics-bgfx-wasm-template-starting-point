@@ -2,7 +2,7 @@
 
 Bullet Physics Hello World (with kb/mouse flying), a 3D Cube falls onto the ground. Press Q to quit, press E to drop the cube again. Click anywhere to capture the mouse pointer and press Esc to release the mouse. Uses bgfx and glfw3, compiling for WebAssembly (wasm) using Emscripten. Additionally compiles to native Linux/X11. Tested on Debian Bookworm (12), might work on Debian Bullseye (11). Very specific versions of bgfx and Emscripten are targeted; upgrading to newer versions may or may not work.
 
-[Demo](http://d3fault.github.io/wasm-3d-demos/fly-around-bullet-physics-bgfx-wasm-template-starting-point/index.html)
+[Demo](http://d3fault.github.io/wasm-3d-demos/skybox/index.html) --- [All Demos](http://d3fault.github.io/wasm-3d-demos/index.html)
 
 ## WebAssembly
 
@@ -26,8 +26,9 @@ Bullet Physics Hello World (with kb/mouse flying), a 3D Cube falls onto the grou
 * `git submodule update --init --recursive`
 * `cd bgfx`
 * `emmake make wasm-debug #it will probably error out on one of the examples, this is fine. just make sure bgfxDebug.bc, bxDebug.bc, and bimgDebug.bc exist in bgfx/.build/wasm/bin/`
+* `make shaderc` #we use the *host* shaderc (not emscripten), and the release build at that
 * `cd ..`
-* `emcmake cmake -DBULLET_DIR=../bullet3 -DBULLET_BUILD_DIR=../bullet3/buildwasm -B buildwasm`
+* `emcmake cmake -B buildwasm`
 * `cd buildwasm`
 * `emmake make`
 
@@ -49,6 +50,7 @@ Bullet Physics Hello World (with kb/mouse flying), a 3D Cube falls onto the grou
 * `git submodule update --init --recursive`
 * `cd bgfx`
 * `make linux-debug64 #it might error out on one of the examples, this is fine. just make sure libbgfx-shared-libDebug.so exists in bgfx/.build/linux64_gcc/bin/`
+* `make shaderc` #release build always. debug gives too many warnings that my IDE interprets as errors
 * `cd ..`
 * `cmake -B buildnative`
 * `cd buildnative`

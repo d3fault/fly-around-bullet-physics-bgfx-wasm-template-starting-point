@@ -3,6 +3,7 @@
 #include <cmath>
 #include <algorithm>
 
+#include "my_bgfx_view_id_constants.h"
 #include "lolreadfile.h"
 
 Bgfx2DOverlayText_DynamicallySized::Bgfx2DOverlayText_DynamicallySized(float xpos, float ypos, const std::string &text, int fontSize, gil::rgba8_pixel_t fontColor, int minWidth, const std::string &fontPath) //TODO: dynamically choose size based on length of text. wrapping(?). limited ofc by view size
@@ -51,7 +52,7 @@ void Bgfx2DOverlayText_DynamicallySized::render(int screenWidth, int screenHeigh
                  0.0f, 100.0f,                       // near, far
                  0.0f, bgfx::getCaps()->homogeneousDepth);
     //bgfx::setViewRect(1, 0, 0, screenWidth, screenHeight);
-    bgfx::setViewTransform(1, nullptr, ortho);
+    bgfx::setViewTransform(MY_BGFX_VIEW_ID_2D_OVERLAY, nullptr, ortho);
 
     bgfx::setVertexBuffer(0, vertex_buffer_handle);
     bgfx::setIndexBuffer(index_buffer_handle);
@@ -64,7 +65,7 @@ void Bgfx2DOverlayText_DynamicallySized::render(int screenWidth, int screenHeigh
     bgfx::setIndexBuffer(index_buffer_handle);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_DEPTH_TEST_ALWAYS);
     bgfx::setTexture(0, s_texColor, texture);
-    bgfx::submit(1, program_handle);
+    bgfx::submit(MY_BGFX_VIEW_ID_2D_OVERLAY, program_handle);
 }
 
 

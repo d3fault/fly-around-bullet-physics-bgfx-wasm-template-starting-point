@@ -1,5 +1,6 @@
 #include "bgfx2doverlaytext_staticallysized.h"
 
+#include "my_bgfx_view_id_constants.h"
 #include "lolreadfile.h"
 
 Bgfx2DOverlayText_StaticallySized::Bgfx2DOverlayText_StaticallySized(float width, float height, float xpos, float ypos, const std::string &text, int fontSize, gil::rgba8_pixel_t fontColor, const std::string &fontPath)
@@ -47,7 +48,7 @@ void Bgfx2DOverlayText_StaticallySized::render(int screenWidth, int screenHeight
                  0.0f, 100.0f,                       // near, far
                  0.0f, bgfx::getCaps()->homogeneousDepth);
 
-    bgfx::setViewTransform(1, nullptr, ortho);
+    bgfx::setViewTransform(MY_BGFX_VIEW_ID_2D_OVERLAY, nullptr, ortho);
 
     bgfx::setVertexBuffer(0, vertex_buffer_handle);
     bgfx::setIndexBuffer(index_buffer_handle);
@@ -60,7 +61,7 @@ void Bgfx2DOverlayText_StaticallySized::render(int screenWidth, int screenHeight
     bgfx::setIndexBuffer(index_buffer_handle);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_DEPTH_TEST_ALWAYS);
     bgfx::setTexture(0, s_texColor, texture);
-    bgfx::submit(1, program_handle);
+    bgfx::submit(MY_BGFX_VIEW_ID_2D_OVERLAY, program_handle);
 }
 
 Bgfx2DOverlayText_StaticallySized::~Bgfx2DOverlayText_StaticallySized()

@@ -28,6 +28,8 @@
 #include <btBulletDynamicsCommon.h>
 #include <btBulletCollisionCommon.h>
 
+#include "my_bgfx_view_id_constants.h"
+#include "skybox.h"
 #include "bgfx2doverlaytext_dynamicallysized.h"
 #include "bgfx2doverlaytext_staticallysized.h"
 #include "lolreadfile.h"
@@ -69,6 +71,7 @@ const double FRAME_DURATION_FOR_BOTH_GFX_AND_PHYSICS_IF_WE_CANT_DETERMINE_REFRES
 float fixedTimeStep_aka_1overRefreshRate = FRAME_DURATION_FOR_BOTH_GFX_AND_PHYSICS_IF_WE_CANT_DETERMINE_REFRESH_RATE; //TODO: Hardcoded 60hz *bullet physics* refresh rate for WASM. there's no [clean] way to get refresh rate from browser aside from benchmarking in js and no thanks. and we can't just use the calculated timeStep in renderFrame because apparently having it vary slightly each time makes bullet cry. i guess it's in the name "fixed"
 std::chrono::high_resolution_clock::time_point lastFrameTimePoint = std::chrono::high_resolution_clock::now();
 
+std::unique_ptr<Skybox> skybox;
 std::unique_ptr<Bgfx2DOverlayText_DynamicallySized> dynamicOverlay;
 std::unique_ptr<Bgfx2DOverlayText_StaticallySized> staticOverlay;
 
@@ -317,84 +320,78 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
 
 void cubeKeyboardControls()
 {
-    // Track which keys are pressed in the current frame
     btVector3 cubeVelocity = physicsWorld.cubeRigidBody->getLinearVelocity();
     const float maxSpeed = 20.0f;
     const float accelerationFactor = 100.0f;
-    const float decelerationFactor = 50.0f; // Factor to slow down the cube when no key is pressed
+    const float decelerationFactor = 50.0f;
 
     btTransform transform1;
     physicsWorld.cubeRigidBody->getMotionState()->getWorldTransform(transform1);
-    btVector3 cubeForward = transform1.getBasis().getColumn(2); // Assuming Z+ is cubeForward
-    btVector3 cubeRight = transform1.getBasis().getColumn(0);   // Assuming X+ is cubeRight
+    btVector3 cubeForward = transform1.getBasis().getColumn(2);
+    btVector3 cubeRight = transform1.getBasis().getColumn(0);
 
-    // Initialize forces for each direction
     btVector3 combinedForce(0, 0, 0);
-    btVector3 counterForce(0, 0, 0);
 
-    if (pressedKeys.count(GLFW_KEY_UP))
+    bool up = pressedKeys.count(GLFW_KEY_UP);
+    bool down = pressedKeys.count(GLFW_KEY_DOWN);
+    bool left = pressedKeys.count(GLFW_KEY_LEFT);
+    bool right = pressedKeys.count(GLFW_KEY_RIGHT);
+
+    // Handle movement with instant stopping when switching direction
+    if (up || down)
     {
-        combinedForce += cubeForward * accelerationFactor;
-    }
-    if (pressedKeys.count(GLFW_KEY_DOWN))
-    {
-        combinedForce += cubeForward * -accelerationFactor;
-    }
-    if (pressedKeys.count(GLFW_KEY_LEFT))
-    {
-        combinedForce += cubeRight * -accelerationFactor;
-    }
-    if (pressedKeys.count(GLFW_KEY_RIGHT))
-    {
-        combinedForce += cubeRight * accelerationFactor;
+        btScalar speedZ = cubeVelocity.dot(cubeForward);
+        if ((up && speedZ < 0) || (down && speedZ > 0)) // Switching direction
+        {
+            combinedForce += cubeForward * (-speedZ * decelerationFactor);
+        }
+        combinedForce += cubeForward * (up ? accelerationFactor : -accelerationFactor);
     }
 
-    // Apply the combined force if there is any
+    if (left || right)
+    {
+        btScalar speedX = cubeVelocity.dot(cubeRight);
+        if ((right && speedX < 0) || (left && speedX > 0)) // Switching direction
+        {
+            combinedForce += cubeRight * (-speedX * decelerationFactor);
+        }
+        combinedForce += cubeRight * (right ? accelerationFactor : -accelerationFactor);
+    }
+
     if (combinedForce.length() > 0)
     {
-        btScalar speed = cubeVelocity.dot(combinedForce.normalized()); // Calculate speed in the direction of the combined force
+        btScalar speed = cubeVelocity.dot(combinedForce.normalized());
         if (speed < maxSpeed)
         {
             physicsWorld.cubeRigidBody->activate();
             physicsWorld.cubeRigidBody->applyCentralForce(combinedForce);
         }
-        // Clamp velocity to prevent exceeding max speed
         if (speed > maxSpeed)
         {
             btVector3 clampedVelocity = combinedForce.normalized() * maxSpeed;
-            clampedVelocity.setY(cubeVelocity.getY()); // Preserve vertical velocity
+            clampedVelocity.setY(cubeVelocity.getY()); // Preserve gravity effect
             physicsWorld.cubeRigidBody->setLinearVelocity(clampedVelocity);
         }
     }
 
-    // Stopping. Calculate counter-force for each axis based on current velocity
-    if (cubeVelocity.length() > 0.1f)
+    // Apply stopping force only in horizontal directions (X, Z), ignoring Y (gravity)
+    if (!up && !down && !left && !right)
     {
-        btVector3 counterForce(0, 0, 0);
-        // Apply counter-force along the local forward axis (Z) if neither Up nor Down is pressed
-        if (!pressedKeys.count(GLFW_KEY_UP) && !pressedKeys.count(GLFW_KEY_DOWN))
-        {
-            btScalar speedZ = cubeVelocity.dot(cubeForward); // Velocity along forward axis
-            counterForce += cubeForward * (-speedZ * decelerationFactor);
-        }
-        // Apply counter-force along the local right axis (X) if neither Left nor Right is pressed
-        if (!pressedKeys.count(GLFW_KEY_LEFT) && !pressedKeys.count(GLFW_KEY_RIGHT))
-        {
-            btScalar speedX = cubeVelocity.dot(cubeRight); // Velocity along right axis
-            counterForce += cubeRight * (-speedX * decelerationFactor);
-        }
-        // Apply counter-force if non-zero
-        if (counterForce.length() > 0)
+        btScalar speedZ = cubeVelocity.dot(cubeForward);
+        btScalar speedX = cubeVelocity.dot(cubeRight);
+
+        btVector3 counterForce = (-speedZ * decelerationFactor) * cubeForward
+                               + (-speedX * decelerationFactor) * cubeRight;
+
+        if (counterForce.length() > 0.1f)
         {
             physicsWorld.cubeRigidBody->applyCentralForce(counterForce);
         }
     }
 }
 
-void renderFrame() {
-
-    bgfx::setState(BGFX_STATE_DEFAULT | BGFX_STATE_BLEND_ALPHA);
-
+void renderFrame()
+{
     float radYaw = bx::toRad(cameraYaw);
     float radPitch = bx::toRad(cameraPitch);
 
@@ -433,10 +430,13 @@ void renderFrame() {
 
     float proj[16];
     bx::mtxProj(proj, 60.0f, float(screenWidth) / float(screenHeight), 0.05f, 150.0f, bgfx::getCaps()->homogeneousDepth);
-    bgfx::setViewTransform(0, view, proj);
+
+    skybox->render(view, proj); //skybox wants the same view but without translation. rotation only
+
+    bgfx::setViewTransform(MY_BGFX_VIEW_ID_OPAQUE_SCENE, view, proj);
 
     // Update physics simulation
-    //wasm let's the browser choose FPS :), but we need to determine out how much time has elapsed since last frame. however, even though we don't need to, for simplicity we'll just calculate this for Linux/X11 too
+    //wasm lets the browser choose FPS :), but we need to determine out how much time has elapsed since last frame. however, even though we don't need to, for simplicity we'll just calculate this for Linux/X11 too
     auto now = std::chrono::high_resolution_clock::now();
     std::chrono::duration<float> deltaTime = now - lastFrameTimePoint;
     lastFrameTimePoint = now;
@@ -460,7 +460,7 @@ void renderFrame() {
         bgfx::setTransform(finalMatrix1);
         bgfx::setVertexBuffer(0, vbh);
         bgfx::setIndexBuffer(ibh);
-        bgfx::submit(0, program);
+        bgfx::submit(MY_BGFX_VIEW_ID_OPAQUE_SCENE, program);
     }
 
     {
@@ -478,7 +478,7 @@ void renderFrame() {
         bgfx::setTransform(finalMatrix2);
         bgfx::setVertexBuffer(0, vbh);
         bgfx::setIndexBuffer(ibh);
-        bgfx::submit(0, program);
+        bgfx::submit(MY_BGFX_VIEW_ID_OPAQUE_SCENE, program);
     }
 
     staticOverlay->render(screenWidth, screenHeight);
@@ -533,8 +533,9 @@ int main(int argc, char **argv)
     }
 
     bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x443355FF, 1.0f, 0);
-    bgfx::setViewRect(0, 0, 0, screenWidth, screenHeight);
-    bgfx::setViewRect(1, 0, 0, screenWidth, screenHeight);
+    bgfx::setViewRect(MY_BGFX_VIEW_ID_SKYBOX, 0, 0, screenWidth, screenHeight);
+    bgfx::setViewRect(MY_BGFX_VIEW_ID_OPAQUE_SCENE, 0, 0, screenWidth, screenHeight);
+    bgfx::setViewRect(MY_BGFX_VIEW_ID_2D_OVERLAY, 0, 0, screenWidth, screenHeight);
 
     bgfx::VertexLayout pcvDecl;
     pcvDecl.begin()
@@ -575,6 +576,7 @@ int main(int argc, char **argv)
         std::cout << "Shader program create success!" << std::endl;
     }
 
+    skybox.reset(new Skybox());
     dynamicOverlay.reset(new Bgfx2DOverlayText_DynamicallySized(75.0f, 75.0f, "Press Q to Quit, E to drop the Cube again, Left-click to start flying around, Esc to stop flying around, WASD to move camera, Arrow Keys to move cube (cube spawns facing random direction and there's no way to rotate it atm)", 22, gil::rgba8_pixel_t(255, 0, 0, 220)));
     staticOverlay.reset(new Bgfx2DOverlayText_StaticallySized(256, 64, 5, 5, "hello, world", 32, gil::rgba8_pixel_t(0, 0, 255, 100)));
 
@@ -607,6 +609,7 @@ int main(int argc, char **argv)
 
     staticOverlay.reset();
     dynamicOverlay.reset();
+    skybox.reset();
 
     bgfx::destroy(program);
     bgfx::destroy(fragmentShader);
