@@ -16,10 +16,11 @@ set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 
 set(BGFX_DIR ${CMAKE_SOURCE_DIR}/bgfx)
 
+set(BGFX_LINUX64_BUILD_DIR ${BGFX_DIR}/.build/linux64_gcc)
 if(DEFINED ENV{EMSDK})
     set(BGFX_BUILD_DIR ${BGFX_DIR}/.build/wasm)
 else()
-    set(BGFX_BUILD_DIR ${BGFX_DIR}/.build/linux64_gcc)
+    set(BGFX_BUILD_DIR ${BGFX_LINUX64_BUILD_DIR})
     find_package(glfw3 REQUIRED)
     find_package(OpenGL REQUIRED)
     find_package(Bullet COMPONENTS BulletCollision BulletDynamics REQUIRED)
@@ -27,7 +28,8 @@ else()
     include_directories(${BULLET_INCLUDE_DIR})
 endif()
 
-set(BGFX_SHADERC ${BGFX_BUILD_DIR}/bin/shadercDebug)
+set(BGFX_SHADERC ${BGFX_LINUX64_BUILD_DIR}/bin/shadercRelease CACHE PATH "Path to Shaderc compiler") #TODO not very portable, but wasm 
+needs to use the host one?
 
 # Function to compile shaders
 function(compile_shader INPUT_FILE OUTPUT_FILE TYPE)

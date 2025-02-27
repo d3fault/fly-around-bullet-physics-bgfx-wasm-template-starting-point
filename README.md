@@ -2,7 +2,7 @@
 
 Bullet Physics Hello World (with kb/mouse flying), a 3D Cube falls onto the ground. Press Q to quit, press E to drop the cube again. Click anywhere to capture the mouse pointer and press Esc to release the mouse. Uses bgfx and glfw3, compiling for WebAssembly (wasm) using Emscripten. Additionally compiles to native Linux/X11. Tested on Debian Bookworm (12), might work on Debian Bullseye (11). Very specific versions of bgfx and Emscripten are targeted; upgrading to newer versions may or may not work.
 
-[Demo](http://d3fault.github.io/wasm-3d-demos/fly-around-bullet-physics-bgfx-wasm-template-starting-point/index.html)
+[Demo](http://d3fault.github.io/wasm-3d-demos/fly-around-bullet-physics-bgfx-wasm-with-2d-overlay-and-cube-control/index.html) --- [All Demos](http://d3fault.github.io/wasm-3d-demos/index.html)
 
 ## WebAssembly
 
